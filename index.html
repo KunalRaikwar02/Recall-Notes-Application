@@ -1,0 +1,1450 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Recall - Offline Knowledge Manager</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        darkBg: '#09090b',       // Neutral 950
+                        darkCard: '#121215',     // Dark gray card
+                        darkBorder: '#27272a',   // Neutral 800
+                        darkHover: '#1f1f23',    // Neutral 900
+                        monoLight: '#f4f4f5',    // Neutral 100
+                        monoMuted: '#a1a1aa',    // Neutral 400
+                        monoDark: '#71717a'      // Neutral 500
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'Fira Code', 'Consolas', 'monospace']
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Marked.js for Markdown parsing -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        /* Custom scrollbars */
+        ::-webkit-scrollbar { width: 5px; height: 5px; }
+        ::-webkit-scrollbar-track { background: #09090b; }
+        ::-webkit-scrollbar-thumb { background: #27272a; border-radius: 2px; }
+        ::-webkit-scrollbar-thumb:hover { background: #3f3f46; }
+
+        /* Mobile touch optimization */
+        button, input, select, textarea {
+            touch-action: manipulation;
+        }
+
+        /* Custom Pure Monochrome Markdown Formatting Styles */
+        .markdown-render h1 { font-size: 1.5rem; font-weight: 700; margin-top: 1rem; margin-bottom: 0.5rem; border-bottom: 1px solid #27272a; padding-bottom: 0.25rem; color: #ffffff; }
+        .markdown-render h2 { font-size: 1.25rem; font-weight: 600; margin-top: 0.875rem; margin-bottom: 0.5rem; color: #f4f4f5; }
+        .markdown-render h3 { font-size: 1.1rem; font-weight: 600; margin-top: 0.75rem; margin-bottom: 0.375rem; color: #f4f4f5; }
+        .markdown-render p { margin-bottom: 0.75rem; line-height: 1.6; color: #d4d4d8; font-size: 0.925rem; }
+        .markdown-render ul { list-style-type: disc; padding-left: 1.25rem; margin-bottom: 0.75rem; color: #d4d4d8; }
+        .markdown-render ol { list-style-type: decimal; padding-left: 1.25rem; margin-bottom: 0.75rem; color: #d4d4d8; }
+        .markdown-render blockquote { border-left: 3px solid #f4f4f5; padding-left: 0.75rem; font-style: italic; color: #a1a1aa; margin: 0.75rem 0; background: #121215; }
+        .markdown-render code { background-color: #1f1f23; padding: 0.15rem 0.35rem; border-radius: 0.2rem; font-family: monospace; font-size: 0.85em; color: #f4f4f5; border: 1px solid #27272a; }
+        .markdown-render pre { background-color: #121215; border: 1px solid #27272a; padding: 0.75rem; border-radius: 0.375rem; overflow-x: auto; margin-bottom: 0.75rem; }
+        .markdown-render pre code { background: none; padding: 0; color: #f4f4f5; border: none; }
+        .markdown-render a { color: #ffffff; text-decoration: underline; text-underline-offset: 3px; font-weight: 500; }
+        .markdown-render a:hover { color: #a1a1aa; }
+        
+        /* Wiki Link Chip Style - Monochrome Noir */
+        .wikilink-chip {
+            background-color: #1f1f23;
+            color: #ffffff;
+            border: 1px solid #3f3f46;
+            padding: 0.1rem 0.45rem;
+            border-radius: 0.25rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            text-decoration: none !important;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.3rem;
+            font-size: 0.85rem;
+        }
+        .wikilink-chip:hover {
+            background-color: #ffffff;
+            color: #000000;
+            border-color: #ffffff;
+        }
+
+        /* Responsive Mobile Layout Adjustments */
+        @media (max-width: 768px) {
+            .mobile-drawer-open {
+                transform: translateX(0) !important;
+            }
+            .mobile-notes-open {
+                transform: translateX(0) !important;
+            }
+        }
+    </style>
+</head>
+<body class="bg-darkBg text-monoLight font-sans h-screen flex flex-col overflow-hidden select-none">
+
+    <!-- Top Navigation Header -->
+    <header class="h-14 border-b border-darkBorder bg-darkCard flex items-center justify-between px-3 md:px-4 z-20 shrink-0">
+        <div class="flex items-center space-x-2 md:space-x-3">
+            <!-- Mobile Toggle Sidebar Button -->
+            <button id="btnMobileToggleSidebar" class="p-2 text-monoMuted hover:text-white rounded border border-darkBorder lg:hidden flex items-center justify-center w-9 h-9">
+                <i class="fa-solid fa-bars text-sm"></i>
+            </button>
+            <!-- Mobile Toggle Notes List Button -->
+            <button id="btnMobileToggleNotes" class="p-2 text-monoMuted hover:text-white rounded border border-darkBorder lg:hidden flex items-center justify-center w-9 h-9">
+                <i class="fa-solid fa-list-ul text-sm"></i>
+            </button>
+
+            <!-- Logo -->
+            <div class="flex items-center space-x-2 font-mono font-bold text-sm md:text-base text-white tracking-wider">
+                <i class="fa-solid fa-cube text-white"></i>
+                <span class="hidden sm:inline">RECALL<span class="text-[10px] ml-1.5 px-1.5 py-0.5 bg-white text-black font-semibold rounded-none tracking-normal">OFFLINE</span></span>
+            </div>
+        </div>
+
+        <!-- Global Search Input -->
+        <div class="flex items-center space-x-2 flex-1 max-w-xs sm:max-w-md md:max-w-lg mx-2 md:mx-4">
+            <div class="relative w-full">
+                <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-xs text-monoDark"></i>
+                <input type="text" id="globalSearchInput" placeholder="Search notes... [Ctrl+K]" 
+                       class="w-full bg-darkBg border border-darkBorder rounded-md py-1.5 pl-8 pr-12 text-xs text-white placeholder-monoDark focus:outline-none focus:border-white transition-colors">
+                <kbd class="hidden sm:inline-block absolute right-2 top-2 text-[10px] bg-darkCard border border-darkBorder rounded px-1 text-monoDark font-mono">Ctrl+K</kbd>
+            </div>
+        </div>
+
+        <!-- Action Tools -->
+        <div class="flex items-center space-x-1.5 text-xs">
+            <button id="btnGraphViewToggle" class="p-2 md:px-2.5 rounded hover:bg-darkHover text-monoMuted hover:text-white border border-darkBorder transition-all flex items-center space-x-1.5" title="Graph View">
+                <i class="fa-solid fa-circle-nodes text-sm"></i>
+                <span class="hidden md:inline">Graph</span>
+            </button>
+            <button id="btnNewNoteHeader" class="p-2 md:px-3 rounded bg-white hover:bg-zinc-200 text-black font-medium transition-all flex items-center space-x-1 shadow-sm h-9">
+                <i class="fa-solid fa-plus text-xs"></i>
+                <span class="hidden sm:inline">New Note</span>
+            </button>
+            <button id="btnShortcuts" class="p-2 rounded hover:bg-darkHover text-monoMuted hover:text-white transition-colors hidden sm:block" title="Shortcuts (?)">
+                <i class="fa-solid fa-keyboard text-sm"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Workspace Container -->
+    <div class="flex-1 flex overflow-hidden relative">
+
+        <!-- Mobile Backdrop Overlay -->
+        <div id="mobileBackdrop" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-20 hidden lg:hidden"></div>
+
+        <!-- Left Sidebar Navigation Drawer -->
+        <aside id="sidebar" class="fixed lg:relative inset-y-0 left-0 w-64 border-r border-darkBorder bg-darkCard flex flex-col shrink-0 transition-transform duration-200 z-30 -translate-x-full lg:translate-x-0 h-full">
+            <!-- Sidebar Header Controls -->
+            <div class="p-3 border-b border-darkBorder flex items-center justify-between">
+                <span class="text-[11px] font-semibold uppercase tracking-wider text-monoDark">Explorer</span>
+                <div class="flex items-center space-x-1">
+                    <button id="btnNewFolder" class="p-1.5 text-monoDark hover:text-white hover:bg-darkHover rounded" title="New Folder">
+                        <i class="fa-solid fa-folder-plus text-xs"></i>
+                    </button>
+                    <button id="btnNewNote" class="p-1.5 text-monoDark hover:text-white hover:bg-darkHover rounded" title="New Note">
+                        <i class="fa-solid fa-file-circle-plus text-xs"></i>
+                    </button>
+                    <button id="btnCloseSidebarMobile" class="p-1.5 text-monoDark hover:text-white lg:hidden" title="Close">
+                        <i class="fa-solid fa-xmark text-sm"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Quick Navigation Views -->
+            <div class="p-2 border-b border-darkBorder space-y-0.5 text-xs">
+                <button data-filter="all" class="nav-filter-btn active w-full flex items-center px-2 py-2 rounded hover:bg-darkHover text-monoMuted hover:text-white text-left">
+                    <i class="fa-solid fa-book w-5 text-monoDark"></i>
+                    <span class="flex-1">All Notes</span>
+                    <span id="countAllNotes" class="text-[10px] bg-darkBg px-1.5 py-0.5 rounded text-monoDark border border-darkBorder">0</span>
+                </button>
+                <button data-filter="pinned" class="nav-filter-btn w-full flex items-center px-2 py-2 rounded hover:bg-darkHover text-monoMuted hover:text-white text-left">
+                    <i class="fa-solid fa-thumbtack w-5 text-monoDark"></i>
+                    <span class="flex-1">Pinned</span>
+                    <span id="countPinnedNotes" class="text-[10px] bg-darkBg px-1.5 py-0.5 rounded text-monoDark border border-darkBorder">0</span>
+                </button>
+                <button data-filter="recent" class="nav-filter-btn w-full flex items-center px-2 py-2 rounded hover:bg-darkHover text-monoMuted hover:text-white text-left">
+                    <i class="fa-solid fa-clock-rotate-left w-5 text-monoDark"></i>
+                    <span class="flex-1">Recent Notes</span>
+                </button>
+                <button data-filter="trash" class="nav-filter-btn w-full flex items-center px-2 py-2 rounded hover:bg-darkHover text-monoMuted hover:text-white text-left">
+                    <i class="fa-solid fa-trash-can w-5 text-monoDark"></i>
+                    <span class="flex-1">Trash</span>
+                    <span id="countTrashNotes" class="text-[10px] bg-darkBg px-1.5 py-0.5 rounded text-monoDark border border-darkBorder">0</span>
+                </button>
+            </div>
+
+            <!-- Nested Folder & Notes Tree -->
+            <div class="flex-1 overflow-y-auto p-2 space-y-3">
+                <div>
+                    <div class="text-[10px] font-semibold text-monoDark uppercase px-2 mb-1 tracking-wider">Folders & Notes</div>
+                    <div id="folderTreeContainer" class="space-y-0.5"></div>
+                </div>
+
+                <!-- Tag Browser Section -->
+                <div class="pt-2 border-t border-darkBorder">
+                    <div class="text-[10px] font-semibold text-monoDark uppercase px-2 mb-1 tracking-wider flex justify-between items-center">
+                        <span>Tags</span>
+                        <i class="fa-solid fa-tags text-[10px]"></i>
+                    </div>
+                    <div id="tagListContainer" class="flex flex-wrap gap-1 px-1"></div>
+                </div>
+            </div>
+
+            <!-- Sidebar Bottom Data Operations -->
+            <div class="p-2.5 border-t border-darkBorder flex items-center justify-between text-xs bg-darkBg">
+                <button id="btnExportJSON" class="px-2.5 py-1.5 bg-darkCard hover:bg-darkBorder border border-darkBorder rounded text-monoMuted hover:text-white text-[11px] flex items-center space-x-1" title="Backup All Data (JSON)">
+                    <i class="fa-solid fa-download"></i>
+                    <span>Export</span>
+                </button>
+                <label class="px-2.5 py-1.5 bg-darkCard hover:bg-darkBorder border border-darkBorder rounded text-monoMuted hover:text-white text-[11px] flex items-center space-x-1 cursor-pointer" title="Restore Data (JSON)">
+                    <i class="fa-solid fa-upload"></i>
+                    <span>Import</span>
+                    <input type="file" id="importFileInput" accept=".json" class="hidden">
+                </label>
+            </div>
+        </aside>
+
+        <!-- Notes List Panel Drawer for Mobile / Static for Desktop -->
+        <div id="notesListPanel" class="fixed lg:relative inset-y-0 left-0 lg:left-auto w-64 border-r border-darkBorder bg-darkBg flex flex-col shrink-0 transition-transform duration-200 z-20 -translate-x-full lg:translate-x-0 h-full">
+            <div class="p-3 border-b border-darkBorder flex items-center justify-between">
+                <span id="notesListTitle" class="text-xs font-semibold text-white uppercase tracking-wider">All Notes</span>
+                <div class="flex items-center space-x-2">
+                    <span id="notesListCount" class="text-[10px] text-monoDark">0 notes</span>
+                    <button id="btnCloseNotesMobile" class="text-monoDark hover:text-white lg:hidden p-1">
+                        <i class="fa-solid fa-xmark text-sm"></i>
+                    </button>
+                </div>
+            </div>
+            <!-- Notes List Column -->
+            <div id="notesListContainer" class="flex-1 overflow-y-auto divide-y divide-darkBorder"></div>
+        </div>
+
+        <!-- Main Workspace View (Editor OR Graph) -->
+        <main class="flex-1 flex flex-col bg-darkBg relative overflow-hidden min-w-0">
+
+            <!-- GRAPH VIEW OVERLAY CONTAINER -->
+            <div id="graphContainer" class="absolute inset-0 bg-darkBg z-30 hidden flex flex-col">
+                <div class="h-12 border-b border-darkBorder bg-darkCard px-4 flex items-center justify-between shrink-0">
+                    <div class="flex items-center space-x-2 text-xs font-semibold text-white">
+                        <i class="fa-solid fa-circle-nodes"></i>
+                        <span>Knowledge Network Graph</span>
+                    </div>
+                    <div class="flex items-center space-x-2 text-xs">
+                        <span class="text-monoDark text-[11px] hidden sm:inline">Click node to open note</span>
+                        <button id="btnCloseGraph" class="px-2.5 py-1 bg-darkHover border border-darkBorder rounded text-white hover:bg-zinc-800">Close</button>
+                    </div>
+                </div>
+                <div class="flex-1 relative overflow-hidden">
+                    <canvas id="graphCanvas" class="w-full h-full cursor-grab active:cursor-grabbing"></canvas>
+                </div>
+            </div>
+
+            <!-- EDITOR WORKSPACE CONTAINER -->
+            <div id="editorContainer" class="flex-1 flex flex-col overflow-hidden">
+
+                <!-- Similarity Warning Banner -->
+                <div id="similarityBanner" class="hidden bg-darkCard border-b border-darkBorder px-4 py-2 text-xs text-white flex items-center justify-between shrink-0">
+                    <div class="flex items-center space-x-2 truncate mr-2">
+                        <i class="fa-solid fa-triangle-exclamation text-monoMuted shrink-0"></i>
+                        <span class="truncate"><strong>Possible Duplicate:</strong> <a href="#" id="similarNoteLink" class="underline font-semibold hover:text-monoMuted">Note Title</a></span>
+                    </div>
+                    <button id="btnDismissSimilarity" class="text-monoDark hover:text-white p-1 shrink-0"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+
+                <!-- Editor Actions Toolbar -->
+                <div class="h-12 border-b border-darkBorder bg-darkCard px-3 md:px-4 flex items-center justify-between shrink-0 overflow-x-auto gap-2">
+                    <div class="flex items-center space-x-2 min-w-0">
+                        <!-- Folder Switcher -->
+                        <div class="flex items-center space-x-1 text-xs text-monoDark shrink-0">
+                            <i class="fa-solid fa-folder"></i>
+                            <select id="editorFolderSelect" class="bg-transparent text-monoMuted text-xs focus:outline-none focus:text-white border border-transparent hover:border-darkBorder rounded px-1 py-0.5 max-w-[100px] sm:max-w-[140px] truncate">
+                                <option value="" class="bg-darkCard">/ (Root)</option>
+                            </select>
+                        </div>
+                        <span class="text-darkBorder shrink-0">/</span>
+                        <!-- Tags Input -->
+                        <div class="flex items-center space-x-1 text-xs text-monoDark min-w-[120px] max-w-[200px]">
+                            <i class="fa-solid fa-tag shrink-0"></i>
+                            <input type="text" id="editorTagsInput" placeholder="Tags (comma separated)..." 
+                                   class="w-full bg-transparent text-xs text-white placeholder-monoDark focus:outline-none focus:border-b border-white py-0.5 truncate">
+                        </div>
+                    </div>
+
+                    <!-- Right Controls: Pin, Mode Toggle, Export, History, Trash -->
+                    <div class="flex items-center space-x-1 text-xs shrink-0">
+                        <button id="btnTogglePin" class="p-1.5 rounded hover:bg-darkHover text-monoDark hover:text-white transition-colors" title="Pin Note">
+                            <i class="fa-solid fa-thumbtack"></i>
+                        </button>
+                        <div class="h-4 w-[1px] bg-darkBorder mx-0.5"></div>
+                        
+                        <!-- View Layout Toggle Buttons -->
+                        <div class="flex bg-darkBg p-0.5 rounded border border-darkBorder">
+                            <button id="btnViewSplit" class="hidden md:block px-2 py-0.5 rounded text-[11px] bg-darkCard text-white border border-darkBorder shadow-sm" title="Split View">Split</button>
+                            <button id="btnViewEdit" class="px-2 py-0.5 rounded text-[11px] text-monoDark hover:text-white" title="Edit View">Edit</button>
+                            <button id="btnViewPreview" class="px-2 py-0.5 rounded text-[11px] text-monoDark hover:text-white" title="Preview View">Preview</button>
+                        </div>
+
+                        <div class="h-4 w-[1px] bg-darkBorder mx-0.5"></div>
+                        <button id="btnExportMarkdown" class="p-1.5 rounded hover:bg-darkHover text-monoDark hover:text-white" title="Export Markdown (.md)">
+                            <i class="fa-solid fa-file-export"></i>
+                        </button>
+                        <button id="btnVersionHistory" class="p-1.5 rounded hover:bg-darkHover text-monoDark hover:text-white relative" title="Version Snapshots">
+                            <i class="fa-solid fa-clock-rotate-left"></i>
+                        </button>
+                        <button id="btnDeleteNote" class="p-1.5 rounded hover:bg-darkHover text-monoDark hover:text-white transition-colors" title="Move to Trash">
+                            <i class="fa-solid fa-trash-can"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Note Title Input Bar -->
+                <div class="px-4 md:px-6 pt-3 pb-2 bg-darkBg border-b border-darkBorder shrink-0">
+                    <input type="text" id="noteTitleInput" placeholder="Note Title..." 
+                           class="w-full bg-transparent text-xl md:text-2xl font-bold text-white placeholder-monoDark focus:outline-none">
+                </div>
+
+                <!-- Main Split Editor & Preview Container -->
+                <div id="splitPaneContainer" class="flex-1 flex flex-col md:flex-row overflow-hidden">
+                    
+                    <!-- Markdown Textarea -->
+                    <div id="paneEdit" class="flex-1 h-full p-4 md:p-6 overflow-y-auto">
+                        <textarea id="markdownSource" placeholder="Start writing Markdown here... Use [[Note Title]] for backlinks!" 
+                                  class="w-full h-full bg-transparent text-monoLight font-mono text-xs md:text-sm resize-none focus:outline-none leading-relaxed placeholder-monoDark"></textarea>
+                    </div>
+
+                    <!-- HTML Render Preview Pane -->
+                    <div id="panePreview" class="hidden md:block flex-1 h-full p-4 md:p-6 overflow-y-auto border-t md:border-t-0 md:border-l border-darkBorder bg-darkBg">
+                        <div id="markdownRender" class="markdown-render"></div>
+
+                        <!-- Backlinks & Linked References Footer Section -->
+                        <div class="mt-10 pt-5 border-t border-darkBorder">
+                            <h4 class="text-xs font-semibold text-monoDark uppercase tracking-wider mb-3 flex items-center space-x-2">
+                                <i class="fa-solid fa-link"></i>
+                                <span>Linked References (Backlinks)</span>
+                            </h4>
+                            <div id="backlinksContainer" class="space-y-2">
+                                <span class="text-xs text-monoDark italic">No other notes link to this note yet.</span>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+
+            </div>
+
+        </main>
+    </div>
+
+    <!-- MODAL: Version History Drawer / Dialog -->
+    <div id="versionModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-3 sm:p-4">
+        <div class="bg-darkCard border border-darkBorder rounded-none w-full max-w-2xl max-h-[85vh] flex flex-col shadow-2xl">
+            <div class="p-3 sm:p-4 border-b border-darkBorder flex items-center justify-between">
+                <h3 class="text-xs font-semibold uppercase tracking-wider text-white flex items-center space-x-2">
+                    <i class="fa-solid fa-history"></i>
+                    <span>Version History Snapshots</span>
+                </h3>
+                <button id="btnCloseVersionModal" class="text-monoDark hover:text-white p-1 text-base"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div id="versionListContainer" class="flex-1 overflow-y-auto p-3 sm:p-4 space-y-3">
+                <!-- Snapshots rendered dynamically -->
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: Command Palette (Ctrl+K) -->
+    <div id="commandPaletteModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-start justify-center pt-12 sm:pt-20 p-3 sm:p-4">
+        <div class="bg-darkCard border border-darkBorder rounded-none w-full max-w-xl shadow-2xl flex flex-col overflow-hidden">
+            <div class="p-3 border-b border-darkBorder flex items-center space-x-2">
+                <i class="fa-solid fa-terminal text-monoDark text-sm"></i>
+                <input type="text" id="cmdInput" placeholder="Type a command or search notes..." 
+                       class="w-full bg-transparent text-xs sm:text-sm text-white focus:outline-none">
+            </div>
+            <div id="cmdResults" class="max-h-72 overflow-y-auto p-2 divide-y divide-darkBorder">
+                <!-- Command list / Search list -->
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: Keyboard Shortcuts Dialog -->
+    <div id="shortcutsModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-3 sm:p-4">
+        <div class="bg-darkCard border border-darkBorder rounded-none w-full max-w-md p-4 sm:p-5 shadow-2xl space-y-4">
+            <div class="flex justify-between items-center border-b border-darkBorder pb-3">
+                <h3 class="font-semibold text-xs uppercase tracking-wider text-white flex items-center space-x-2">
+                    <i class="fa-solid fa-keyboard"></i>
+                    <span>Keyboard Shortcuts</span>
+                </h3>
+                <button id="btnCloseShortcuts" class="text-monoDark hover:text-white p-1"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="space-y-2 text-xs">
+                <div class="flex justify-between py-1 border-b border-darkBorder">
+                    <span class="text-monoMuted">Command Palette</span>
+                    <kbd class="bg-darkBg border border-darkBorder rounded px-1.5 py-0.5 font-mono text-white">Ctrl + K</kbd>
+                </div>
+                <div class="flex justify-between py-1 border-b border-darkBorder">
+                    <span class="text-monoMuted">Create New Note</span>
+                    <kbd class="bg-darkBg border border-darkBorder rounded px-1.5 py-0.5 font-mono text-white">Ctrl + N</kbd>
+                </div>
+                <div class="flex justify-between py-1 border-b border-darkBorder">
+                    <span class="text-monoMuted">Save Note Snapshot</span>
+                    <kbd class="bg-darkBg border border-darkBorder rounded px-1.5 py-0.5 font-mono text-white">Ctrl + S</kbd>
+                </div>
+                <div class="flex justify-between py-1 border-b border-darkBorder">
+                    <span class="text-monoMuted">Toggle Graph View</span>
+                    <kbd class="bg-darkBg border border-darkBorder rounded px-1.5 py-0.5 font-mono text-white">Ctrl + G</kbd>
+                </div>
+                <div class="flex justify-between py-1">
+                    <span class="text-monoMuted">Show Shortcuts Help</span>
+                    <kbd class="bg-darkBg border border-darkBorder rounded px-1.5 py-0.5 font-mono text-white">?</kbd>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification Toast Element -->
+    <div id="toast" class="fixed bottom-4 right-4 bg-white text-black px-4 py-2.5 rounded-none text-xs font-semibold shadow-2xl flex items-center space-x-2 transition-all duration-300 opacity-0 pointer-events-none z-50 transform translate-y-2">
+        <i id="toastIcon" class="fa-solid fa-circle-check"></i>
+        <span id="toastMsg">Action completed</span>
+    </div>
+
+    <!-- APP ENGINE LOGIC -->
+    <script>
+        /**
+         * RECALL KNOWLEDGE MANAGER - RESPONSIVE MONOCHROME EDITION
+         * IndexedDB Storage Engine, Mobile Adaptability, Graph View & Backlink Indexer
+         */
+
+        const AppState = {
+            db: null,
+            notes: [],
+            folders: [],
+            activeNoteId: null,
+            activeFilter: 'all',
+            filterValue: null,
+            searchQuery: '',
+            viewMode: window.innerWidth < 768 ? 'edit' : 'split',
+            saveDebounceTimer: null
+        };
+
+        const DB_NAME = 'RecallDB';
+        const DB_VERSION = 1;
+
+        function initDatabase() {
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open(DB_NAME, DB_VERSION);
+                request.onupgradeneeded = (e) => {
+                    const db = e.target.result;
+                    if (!db.objectStoreNames.contains('notes')) {
+                        const noteStore = db.createObjectStore('notes', { keyPath: 'id' });
+                        noteStore.createIndex('updatedAt', 'updatedAt', { unique: false });
+                        noteStore.createIndex('folderId', 'folderId', { unique: false });
+                    }
+                    if (!db.objectStoreNames.contains('folders')) {
+                        db.createObjectStore('folders', { keyPath: 'id' });
+                    }
+                    if (!db.objectStoreNames.contains('versions')) {
+                        const versionStore = db.createObjectStore('versions', { keyPath: 'id' });
+                        versionStore.createIndex('noteId', 'noteId', { unique: false });
+                    }
+                };
+                request.onsuccess = (e) => {
+                    AppState.db = e.target.result;
+                    resolve();
+                };
+                request.onerror = (e) => reject(e.target.error);
+            });
+        }
+
+        function dbSave(storeName, item) {
+            return new Promise((resolve, reject) => {
+                const tx = AppState.db.transaction(storeName, 'readwrite');
+                const store = tx.objectStore(storeName);
+                const req = store.put(item);
+                req.onsuccess = () => resolve(item);
+                req.onerror = () => reject(req.error);
+            });
+        }
+
+        function dbGetAll(storeName) {
+            return new Promise((resolve, reject) => {
+                const tx = AppState.db.transaction(storeName, 'readonly');
+                const store = tx.objectStore(storeName);
+                const req = store.getAll();
+                req.onsuccess = () => resolve(req.result);
+                req.onerror = () => reject(req.error);
+            });
+        }
+
+        function dbDelete(storeName, id) {
+            return new Promise((resolve, reject) => {
+                const tx = AppState.db.transaction(storeName, 'readwrite');
+                const store = tx.objectStore(storeName);
+                const req = store.delete(id);
+                req.onsuccess = () => resolve();
+                req.onerror = () => reject(req.error);
+            });
+        }
+
+        function showToast(msg, iconClass = 'fa-circle-check') {
+            const toast = document.getElementById('toast');
+            const toastMsg = document.getElementById('toastMsg');
+            const toastIcon = document.getElementById('toastIcon');
+            
+            toastMsg.textContent = msg;
+            toastIcon.className = `fa-solid ${iconClass}`;
+            toast.classList.remove('opacity-0', 'pointer-events-none', 'translate-y-2');
+            
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'pointer-events-none', 'translate-y-2');
+            }, 2500);
+        }
+
+        async function initApp() {
+            try {
+                await initDatabase();
+                AppState.folders = await dbGetAll('folders');
+                AppState.notes = await dbGetAll('notes');
+
+                if (AppState.notes.length === 0) {
+                    await createDemoNotes();
+                }
+
+                renderSidebar();
+                renderNotesList();
+                
+                if (AppState.notes.length > 0) {
+                    const firstNote = AppState.notes.find(n => !n.isDeleted) || AppState.notes[0];
+                    if (firstNote) selectNote(firstNote.id);
+                }
+
+                setupEventListeners();
+                setupCustomMarkdownRenderer();
+                applyResponsiveViewMode();
+            } catch (err) {
+                console.error("Failed to initialize app:", err);
+            }
+        }
+
+        async function createDemoNotes() {
+            const defaultFolder = { id: 'folder_1', name: 'Projects', parentId: null };
+            await dbSave('folders', defaultFolder);
+            AppState.folders.push(defaultFolder);
+
+            const demo1 = {
+                id: 'note_1',
+                title: 'Welcome to Recall',
+                content: '# Welcome to Recall\n\nA monochrome offline-first knowledge manager.\n\n### Core Features:\n- **Nested Folders** and **Tags**\n- **Wiki-Links**: Try linking to [[Project Ideas]] or [[Markdown Cheat Sheet]]\n- **IndexedDB**: 100% Client-side local storage\n- **Version Snapshots**: Complete editing history\n\nPress `Ctrl+K` for the Command Palette.',
+                tags: ['welcome', 'guide'],
+                folderId: null,
+                isPinned: true,
+                isDeleted: false,
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString()
+            };
+
+            const demo2 = {
+                id: 'note_2',
+                title: 'Project Ideas',
+                content: '# Project Ideas\n\nKey areas for system architecture:\n1. Interactive Canvas Graph\n2. Pure Noir Brutalist interface\n3. Bidirectional links back to [[Welcome to Recall]]',
+                tags: ['ideas', 'projects'],
+                folderId: 'folder_1',
+                isPinned: false,
+                isDeleted: false,
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString()
+            };
+
+            const demo3 = {
+                id: 'note_3',
+                title: 'Markdown Cheat Sheet',
+                content: '# Markdown Formatting\n\n- Bold: **text**\n- Italic: *text*\n- Code: `const x = 10;`\n\n> Simple responsive design is easy to navigate.',
+                tags: ['guide'],
+                folderId: null,
+                isPinned: false,
+                isDeleted: false,
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString()
+            };
+
+            await dbSave('notes', demo1);
+            await dbSave('notes', demo2);
+            await dbSave('notes', demo3);
+            AppState.notes = [demo1, demo2, demo3];
+        }
+
+        function setupCustomMarkdownRenderer() {
+            const renderer = new marked.Renderer();
+            const originalText = renderer.text.bind(renderer);
+            renderer.text = function(text) {
+                let parsedText = originalText(text);
+                return parsedText.replace(/\[\[(.*?)\]\]/g, (match, title) => {
+                    const targetNote = AppState.notes.find(n => n.title.toLowerCase() === title.trim().toLowerCase() && !n.isDeleted);
+                    const targetId = targetNote ? targetNote.id : '';
+                    return `<a class="wikilink-chip" data-note-title="${escapeHtml(title.trim())}" data-note-id="${targetId}" onclick="navigateToWikiLink('${escapeHtml(title.trim())}')">
+                                <i class="fa-solid fa-link text-[10px]"></i>${escapeHtml(title.trim())}
+                            </a>`;
+                });
+            };
+
+            marked.setOptions({ renderer: renderer, breaks: true });
+        }
+
+        function escapeHtml(str) {
+            return (str || '').replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+        }
+
+        window.navigateToWikiLink = function(title) {
+            const targetNote = AppState.notes.find(n => n.title.toLowerCase() === title.toLowerCase() && !n.isDeleted);
+            if (targetNote) {
+                selectNote(targetNote.id);
+            } else {
+                if (confirm(`Note "${title}" does not exist. Create note?`)) {
+                    createNewNote(title);
+                }
+            }
+        };
+
+        function renderSidebar() {
+            const allActive = AppState.notes.filter(n => !n.isDeleted);
+            document.getElementById('countAllNotes').textContent = allActive.length;
+            document.getElementById('countPinnedNotes').textContent = allActive.filter(n => n.isPinned).length;
+            document.getElementById('countTrashNotes').textContent = AppState.notes.filter(n => n.isDeleted).length;
+
+            const folderTreeContainer = document.getElementById('folderTreeContainer');
+            folderTreeContainer.innerHTML = '';
+
+            const rootFolders = AppState.folders.filter(f => !f.parentId);
+            rootFolders.forEach(folder => {
+                folderTreeContainer.appendChild(createFolderNode(folder));
+            });
+
+            const editorFolderSelect = document.getElementById('editorFolderSelect');
+            editorFolderSelect.innerHTML = '<option value="">/ (Root)</option>';
+            AppState.folders.forEach(f => {
+                const opt = document.createElement('option');
+                opt.value = f.id;
+                opt.className = 'bg-darkCard text-white';
+                opt.textContent = f.name;
+                editorFolderSelect.appendChild(opt);
+            });
+
+            const tagMap = new Map();
+            allActive.forEach(n => {
+                if (n.tags && Array.isArray(n.tags)) {
+                    n.tags.forEach(t => {
+                        const cleanTag = t.trim().toLowerCase();
+                        if (cleanTag) tagMap.set(cleanTag, (tagMap.get(cleanTag) || 0) + 1);
+                    });
+                }
+            });
+
+            const tagListContainer = document.getElementById('tagListContainer');
+            tagListContainer.innerHTML = '';
+            if (tagMap.size === 0) {
+                tagListContainer.innerHTML = '<span class="text-[11px] text-monoDark italic px-2">No tags</span>';
+            } else {
+                tagMap.forEach((count, tag) => {
+                    const tagBtn = document.createElement('button');
+                    tagBtn.className = `text-[11px] px-2 py-0.5 rounded border border-darkBorder hover:border-white text-monoMuted hover:text-white flex items-center space-x-1 ${AppState.activeFilter === 'tag' && AppState.filterValue === tag ? 'bg-white text-black font-semibold' : 'bg-darkBg'}`;
+                    tagBtn.innerHTML = `<span>#${escapeHtml(tag)}</span><span class="text-[9px]">(${count})</span>`;
+                    tagBtn.onclick = () => {
+                        filterByTag(tag);
+                        closeMobileDrawers();
+                    };
+                    tagListContainer.appendChild(tagBtn);
+                });
+            }
+        }
+
+        function createFolderNode(folder) {
+            const div = document.createElement('div');
+            div.className = 'pl-2 space-y-0.5';
+
+            const isSelected = AppState.activeFilter === 'folder' && AppState.filterValue === folder.id;
+            const folderHeader = document.createElement('div');
+            folderHeader.className = `flex items-center justify-between px-2 py-1.5 rounded text-xs cursor-pointer hover:bg-darkHover text-monoMuted hover:text-white ${isSelected ? 'bg-darkHover text-white font-medium border-l-2 border-white' : ''}`;
+            
+            folderHeader.innerHTML = `
+                <div class="flex items-center space-x-1.5 overflow-hidden">
+                    <i class="fa-solid fa-folder text-xs"></i>
+                    <span class="truncate">${escapeHtml(folder.name)}</span>
+                </div>
+                <button class="text-[10px] hover:text-white p-1 opacity-70 hover:opacity-100 transition-opacity" title="Delete Folder">
+                    <i class="fa-solid fa-trash"></i>
+                </button>
+            `;
+
+            folderHeader.onclick = (e) => {
+                if (e.target.closest('button')) {
+                    deleteFolder(folder.id);
+                } else {
+                    filterByFolder(folder.id);
+                    closeMobileDrawers();
+                }
+            };
+
+            div.appendChild(folderHeader);
+
+            const subfolders = AppState.folders.filter(f => f.parentId === folder.id);
+            subfolders.forEach(sub => {
+                div.appendChild(createFolderNode(sub));
+            });
+
+            return div;
+        }
+
+        function filterByTag(tag) {
+            AppState.activeFilter = 'tag';
+            AppState.filterValue = tag;
+            setActiveNavButton(null);
+            document.getElementById('notesListTitle').textContent = `#${tag}`;
+            renderNotesList();
+        }
+
+        function filterByFolder(folderId) {
+            const folder = AppState.folders.find(f => f.id === folderId);
+            AppState.activeFilter = 'folder';
+            AppState.filterValue = folderId;
+            setActiveNavButton(null);
+            document.getElementById('notesListTitle').textContent = folder ? folder.name : 'Folder';
+            renderNotesList();
+        }
+
+        function setActiveNavButton(filterName) {
+            document.querySelectorAll('.nav-filter-btn').forEach(btn => {
+                if (filterName && btn.dataset.filter === filterName) {
+                    btn.classList.add('bg-darkHover', 'text-white');
+                } else {
+                    btn.classList.remove('bg-darkHover', 'text-white');
+                }
+            });
+        }
+
+        function getFilteredNotes() {
+            let list = [...AppState.notes];
+
+            if (AppState.activeFilter === 'pinned') {
+                list = list.filter(n => !n.isDeleted && n.isPinned);
+            } else if (AppState.activeFilter === 'recent') {
+                list = list.filter(n => !n.isDeleted).sort((a,b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+            } else if (AppState.activeFilter === 'trash') {
+                list = list.filter(n => n.isDeleted);
+            } else if (AppState.activeFilter === 'folder') {
+                list = list.filter(n => !n.isDeleted && n.folderId === AppState.filterValue);
+            } else if (AppState.activeFilter === 'tag') {
+                list = list.filter(n => !n.isDeleted && n.tags && n.tags.map(t=>t.toLowerCase()).includes(AppState.filterValue));
+            } else {
+                list = list.filter(n => !n.isDeleted);
+            }
+
+            const query = AppState.searchQuery.trim().toLowerCase();
+            if (query) {
+                const rankedList = [];
+                list.forEach(note => {
+                    const titleLower = note.title.toLowerCase();
+                    const contentLower = note.content.toLowerCase();
+                    let score = 0;
+
+                    if (titleLower === query) score += 100;
+                    else if (titleLower.startsWith(query)) score += 50;
+                    else if (titleLower.includes(query)) score += 30;
+
+                    if (contentLower.includes(query)) score += 10;
+
+                    if (score > 0) {
+                        rankedList.push({ note, score });
+                    }
+                });
+
+                rankedList.sort((a, b) => b.score - a.score);
+                return rankedList.map(item => item.note);
+            }
+
+            return list;
+        }
+
+        function renderNotesList() {
+            const container = document.getElementById('notesListContainer');
+            container.innerHTML = '';
+            const notes = getFilteredNotes();
+
+            document.getElementById('notesListCount').textContent = `${notes.length} notes`;
+
+            if (notes.length === 0) {
+                container.innerHTML = `<div class="p-4 text-center text-xs text-monoDark">No notes found.</div>`;
+                return;
+            }
+
+            notes.forEach(note => {
+                const div = document.createElement('div');
+                const isActive = note.id === AppState.activeNoteId;
+                div.className = `p-3 cursor-pointer hover:bg-darkHover transition-colors ${isActive ? 'bg-darkHover border-l-2 border-white' : ''}`;
+                
+                const timeStr = new Date(note.updatedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+                const snippet = note.content.replace(/[#*`>-]/g, '').slice(0, 70) || 'Empty note...';
+
+                div.innerHTML = `
+                    <div class="flex items-center justify-between mb-1">
+                        <span class="text-xs font-semibold text-white truncate">
+                            ${note.isPinned ? '<i class="fa-solid fa-thumbtack text-[10px] mr-1 text-monoMuted"></i>' : ''}
+                            ${escapeHtml(note.title || 'Untitled Note')}
+                        </span>
+                        <span class="text-[10px] text-monoDark shrink-0 ml-2">${timeStr}</span>
+                    </div>
+                    <p class="text-[11px] text-monoMuted line-clamp-2 leading-relaxed mb-1.5">${escapeHtml(snippet)}</p>
+                    <div class="flex items-center justify-between text-[10px] text-monoDark">
+                        <span class="truncate max-w-[100px]">${note.folderId ? getFolderName(note.folderId) : ''}</span>
+                        <div class="flex items-center space-x-1">
+                            ${(note.tags || []).slice(0, 2).map(t => `<span class="bg-darkCard px-1 rounded border border-darkBorder">#${escapeHtml(t)}</span>`).join('')}
+                        </div>
+                    </div>
+                `;
+
+                div.onclick = () => {
+                    selectNote(note.id);
+                    closeMobileDrawers();
+                };
+                container.appendChild(div);
+            });
+        }
+
+        function getFolderName(folderId) {
+            const folder = AppState.folders.find(f => f.id === folderId);
+            return folder ? `📁 ${folder.name}` : '';
+        }
+
+        function selectNote(noteId) {
+            AppState.activeNoteId = noteId;
+            const note = AppState.notes.find(n => n.id === noteId);
+
+            if (!note) return;
+
+            document.getElementById('noteTitleInput').value = note.title || '';
+            document.getElementById('markdownSource').value = note.content || '';
+            document.getElementById('editorTagsInput').value = (note.tags || []).join(', ');
+            document.getElementById('editorFolderSelect').value = note.folderId || '';
+
+            updatePinButtonUI(note.isPinned);
+            renderMarkdownPreview();
+            renderBacklinks(note);
+            checkSimilarity(note);
+
+            renderNotesList();
+        }
+
+        function updatePinButtonUI(isPinned) {
+            const btn = document.getElementById('btnTogglePin');
+            if (isPinned) {
+                btn.classList.add('text-white');
+                btn.classList.remove('text-monoDark');
+            } else {
+                btn.classList.remove('text-white');
+                btn.classList.add('text-monoDark');
+            }
+        }
+
+        function renderMarkdownPreview() {
+            const source = document.getElementById('markdownSource').value;
+            const renderTarget = document.getElementById('markdownRender');
+            renderTarget.innerHTML = marked.parse(source || '*No content*');
+        }
+
+        function renderBacklinks(currentNote) {
+            const backlinksContainer = document.getElementById('backlinksContainer');
+            backlinksContainer.innerHTML = '';
+
+            const activeNotes = AppState.notes.filter(n => !n.isDeleted && n.id !== currentNote.id);
+            const titleTarget = currentNote.title.trim().toLowerCase();
+
+            if (!titleTarget) return;
+
+            const referencingNotes = activeNotes.filter(n => {
+                return n.content.toLowerCase().includes(`[[${titleTarget}]]`);
+            });
+
+            if (referencingNotes.length === 0) {
+                backlinksContainer.innerHTML = `<span class="text-xs text-monoDark italic">No other notes link to this note yet.</span>`;
+                return;
+            }
+
+            referencingNotes.forEach(ref => {
+                const div = document.createElement('div');
+                div.className = 'p-2.5 rounded bg-darkCard border border-darkBorder hover:border-white transition-colors cursor-pointer';
+                div.innerHTML = `
+                    <div class="flex items-center justify-between text-xs font-semibold text-white mb-1">
+                        <span>${escapeHtml(ref.title)}</span>
+                        <i class="fa-solid fa-arrow-right text-[10px] text-monoMuted"></i>
+                    </div>
+                    <p class="text-[11px] text-monoMuted line-clamp-2">${escapeHtml(ref.content)}</p>
+                `;
+                div.onclick = () => selectNote(ref.id);
+                backlinksContainer.appendChild(div);
+            });
+        }
+
+        function checkSimilarity(currentNote) {
+            const banner = document.getElementById('similarityBanner');
+            const otherNotes = AppState.notes.filter(n => !n.isDeleted && n.id !== currentNote.id);
+
+            const getTokens = (text) => new Set((text || '').toLowerCase().match(/\w+/g) || []);
+            const currentTokens = getTokens(currentNote.title + ' ' + currentNote.content);
+
+            if (currentTokens.size < 5) {
+                banner.classList.add('hidden');
+                return;
+            }
+
+            let highestSimilarity = 0;
+            let matchNote = null;
+
+            otherNotes.forEach(note => {
+                const noteTokens = getTokens(note.title + ' ' + note.content);
+                const intersection = new Set([...currentTokens].filter(x => noteTokens.has(x)));
+                const union = new Set([...currentTokens, ...noteTokens]);
+                const similarity = union.size > 0 ? intersection.size / union.size : 0;
+
+                if (similarity > highestSimilarity) {
+                    highestSimilarity = similarity;
+                    matchNote = note;
+                }
+            });
+
+            if (highestSimilarity > 0.6 && matchNote) {
+                banner.classList.remove('hidden');
+                const link = document.getElementById('similarNoteLink');
+                link.textContent = matchNote.title;
+                link.onclick = (e) => {
+                    e.preventDefault();
+                    selectNote(matchNote.id);
+                };
+            } else {
+                banner.classList.add('hidden');
+            }
+        }
+
+        function handleEditorChange() {
+            if (!AppState.activeNoteId) return;
+
+            clearTimeout(AppState.saveDebounceTimer);
+            AppState.saveDebounceTimer = setTimeout(async () => {
+                await saveActiveNote();
+            }, 400);
+
+            renderMarkdownPreview();
+        }
+
+        async function saveActiveNote() {
+            const note = AppState.notes.find(n => n.id === AppState.activeNoteId);
+            if (!note) return;
+
+            const title = document.getElementById('noteTitleInput').value.trim();
+            const content = document.getElementById('markdownSource').value;
+            const tagsRaw = document.getElementById('editorTagsInput').value;
+            const folderId = document.getElementById('editorFolderSelect').value || null;
+
+            const tags = tagsRaw.split(',').map(t => t.trim()).filter(Boolean);
+
+            note.title = title || 'Untitled Note';
+            note.content = content;
+            note.tags = tags;
+            note.folderId = folderId;
+            note.updatedAt = new Date().toISOString();
+
+            await dbSave('notes', note);
+            await createVersionSnapshot(note);
+
+            renderSidebar();
+            renderNotesList();
+            renderBacklinks(note);
+            checkSimilarity(note);
+        }
+
+        async function createVersionSnapshot(note) {
+            const version = {
+                id: 'ver_' + Date.now(),
+                noteId: note.id,
+                title: note.title,
+                content: note.content,
+                timestamp: new Date().toISOString()
+            };
+            await dbSave('versions', version);
+        }
+
+        async function openVersionModal() {
+            if (!AppState.activeNoteId) return;
+            const modal = document.getElementById('versionModal');
+            const container = document.getElementById('versionListContainer');
+            container.innerHTML = '';
+
+            const tx = AppState.db.transaction('versions', 'readonly');
+            const store = tx.objectStore('versions');
+            const index = store.index('noteId');
+            const req = index.getAll(AppState.activeNoteId);
+
+            req.onsuccess = () => {
+                const versions = req.result.sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp));
+                if (versions.length === 0) {
+                    container.innerHTML = '<p class="text-xs text-monoDark">No snapshots saved yet.</p>';
+                } else {
+                    versions.forEach((ver, idx) => {
+                        const div = document.createElement('div');
+                        div.className = 'p-3 bg-darkBg border border-darkBorder rounded text-xs space-y-2';
+                        div.innerHTML = `
+                            <div class="flex items-center justify-between">
+                                <span class="font-semibold text-white">Snapshot #${versions.length - idx}</span>
+                                <span class="text-[10px] text-monoDark">${new Date(ver.timestamp).toLocaleString()}</span>
+                            </div>
+                            <p class="font-mono text-[11px] text-monoMuted line-clamp-3 bg-darkCard p-2 rounded border border-darkBorder">${escapeHtml(ver.content)}</p>
+                            <button onclick="restoreVersion('${ver.id}')" class="px-2.5 py-1.5 bg-white hover:bg-zinc-200 text-black font-semibold rounded text-[11px]">
+                                Restore Version
+                            </button>
+                        `;
+                        container.appendChild(div);
+                    });
+                }
+                modal.classList.remove('hidden');
+            };
+        }
+
+        window.restoreVersion = async function(versionId) {
+            const tx = AppState.db.transaction('versions', 'readonly');
+            const ver = await new Promise(r => {
+                tx.objectStore('versions').get(versionId).onsuccess = (e) => r(e.target.result);
+            });
+
+            if (ver) {
+                document.getElementById('noteTitleInput').value = ver.title;
+                document.getElementById('markdownSource').value = ver.content;
+                await saveActiveNote();
+                document.getElementById('versionModal').classList.add('hidden');
+                showToast('Version restored');
+            }
+        };
+
+        async function createNewNote(customTitle = '') {
+            const newNote = {
+                id: 'note_' + Date.now(),
+                title: customTitle || 'Untitled Note',
+                content: '',
+                tags: [],
+                folderId: AppState.activeFilter === 'folder' ? AppState.filterValue : null,
+                isPinned: false,
+                isDeleted: false,
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString()
+            };
+
+            await dbSave('notes', newNote);
+            AppState.notes.unshift(newNote);
+
+            renderSidebar();
+            selectNote(newNote.id);
+            closeMobileDrawers();
+            document.getElementById('noteTitleInput').focus();
+            showToast('New note created');
+        }
+
+        async function createFolder() {
+            const folderName = prompt('Enter folder name:');
+            if (!folderName) return;
+
+            const newFolder = {
+                id: 'folder_' + Date.now(),
+                name: folderName.trim(),
+                parentId: AppState.activeFilter === 'folder' ? AppState.filterValue : null
+            };
+
+            await dbSave('folders', newFolder);
+            AppState.folders.push(newFolder);
+            renderSidebar();
+            showToast('Folder created');
+        }
+
+        async function deleteFolder(folderId) {
+            if (confirm('Delete folder? Notes inside will be moved to root.')) {
+                await dbDelete('folders', folderId);
+                AppState.folders = AppState.folders.filter(f => f.id !== folderId);
+                
+                AppState.notes.forEach(async (n) => {
+                    if (n.folderId === folderId) {
+                        n.folderId = null;
+                        await dbSave('notes', n);
+                    }
+                });
+
+                renderSidebar();
+                renderNotesList();
+            }
+        }
+
+        async function toggleDeleteNote() {
+            const note = AppState.notes.find(n => n.id === AppState.activeNoteId);
+            if (!note) return;
+
+            if (note.isDeleted) {
+                note.isDeleted = false;
+                showToast('Note restored');
+            } else {
+                note.isDeleted = true;
+                showToast('Note moved to trash');
+            }
+
+            await dbSave('notes', note);
+            renderSidebar();
+            
+            const nextNote = AppState.notes.find(n => !n.isDeleted);
+            if (nextNote) selectNote(nextNote.id);
+            else renderNotesList();
+        }
+
+        async function exportJSONBackup() {
+            const data = {
+                version: 1,
+                exportedAt: new Date().toISOString(),
+                folders: AppState.folders,
+                notes: AppState.notes
+            };
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `recall_backup_${new Date().toISOString().slice(0,10)}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+            showToast('Backup exported');
+        }
+
+        function importJSONBackup(file) {
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                try {
+                    const data = JSON.parse(e.target.result);
+                    if (data.notes && data.folders) {
+                        for (const f of data.folders) await dbSave('folders', f);
+                        for (const n of data.notes) await dbSave('notes', n);
+                        
+                        AppState.folders = await dbGetAll('folders');
+                        AppState.notes = await dbGetAll('notes');
+
+                        renderSidebar();
+                        renderNotesList();
+                        if (AppState.notes.length > 0) selectNote(AppState.notes[0].id);
+                        showToast('Backup imported');
+                    }
+                } catch (err) {
+                    alert('Invalid JSON file format.');
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        function exportActiveMarkdown() {
+            const note = AppState.notes.find(n => n.id === AppState.activeNoteId);
+            if (!note) return;
+            const blob = new Blob([note.content], { type: 'text/markdown' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${note.title.toLowerCase().replace(/\s+/g, '_')}.md`;
+            a.click();
+            URL.revokeObjectURL(url);
+            showToast('Markdown exported');
+        }
+
+        function renderGraphView() {
+            const graphContainer = document.getElementById('graphContainer');
+            const canvas = document.getElementById('graphCanvas');
+            const ctx = canvas.getContext('2d');
+
+            graphContainer.classList.remove('hidden');
+
+            canvas.width = graphContainer.clientWidth;
+            canvas.height = graphContainer.clientHeight;
+
+            const activeNotes = AppState.notes.filter(n => !n.isDeleted);
+            const nodes = activeNotes.map((n, idx) => {
+                const angle = (idx / activeNotes.length) * Math.PI * 2;
+                const radius = Math.min(canvas.width, canvas.height) / 3;
+                return {
+                    id: n.id,
+                    title: n.title,
+                    x: canvas.width / 2 + Math.cos(angle) * radius,
+                    y: canvas.height / 2 + Math.sin(angle) * radius
+                };
+            });
+
+            const edges = [];
+            activeNotes.forEach(source => {
+                activeNotes.forEach(target => {
+                    if (source.id !== target.id && source.content.toLowerCase().includes(`[[${target.title.toLowerCase()}]]`)) {
+                        const sourceNode = nodes.find(n => n.id === source.id);
+                        const targetNode = nodes.find(n => n.id === target.id);
+                        if (sourceNode && targetNode) {
+                            edges.push({ source: sourceNode, target: targetNode });
+                        }
+                    }
+                });
+            });
+
+            function animate() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                ctx.strokeStyle = '#3f3f46';
+                ctx.lineWidth = 1;
+                edges.forEach(edge => {
+                    ctx.beginPath();
+                    ctx.moveTo(edge.source.x, edge.source.y);
+                    ctx.lineTo(edge.target.x, edge.target.y);
+                    ctx.stroke();
+                });
+
+                nodes.forEach(node => {
+                    const isSelected = node.id === AppState.activeNoteId;
+                    ctx.beginPath();
+                    ctx.arc(node.x, node.y, isSelected ? 8 : 5, 0, Math.PI * 2);
+                    ctx.fillStyle = isSelected ? '#ffffff' : '#71717a';
+                    ctx.fill();
+                    ctx.strokeStyle = '#000000';
+                    ctx.lineWidth = 1.5;
+                    ctx.stroke();
+
+                    ctx.fillStyle = '#f4f4f5';
+                    ctx.font = '11px Inter, sans-serif';
+                    ctx.textAlign = 'center';
+                    ctx.fillText(node.title, node.x, node.y + 18);
+                });
+            }
+
+            animate();
+
+            canvas.onclick = (e) => {
+                const rect = canvas.getBoundingClientRect();
+                const mouseX = e.clientX - rect.left;
+                const mouseY = e.clientY - rect.top;
+
+                nodes.forEach(node => {
+                    const dist = Math.hypot(node.x - mouseX, node.y - mouseY);
+                    if (dist < 15) {
+                        graphContainer.classList.add('hidden');
+                        selectNote(node.id);
+                    }
+                });
+            };
+        }
+
+        function toggleCommandPalette(show) {
+            const modal = document.getElementById('commandPaletteModal');
+            const input = document.getElementById('cmdInput');
+            
+            if (show) {
+                modal.classList.remove('hidden');
+                input.value = '';
+                input.focus();
+                renderCommandResults('');
+            } else {
+                modal.classList.add('hidden');
+            }
+        }
+
+        function renderCommandResults(query) {
+            const container = document.getElementById('cmdResults');
+            container.innerHTML = '';
+
+            const commands = [
+                { title: 'Create New Note', icon: 'fa-file-circle-plus', action: () => createNewNote() },
+                { title: 'Create New Folder', icon: 'fa-folder-plus', action: () => createFolder() },
+                { title: 'Toggle Graph View', icon: 'fa-circle-nodes', action: () => renderGraphView() },
+                { title: 'Export Backup JSON', icon: 'fa-download', action: () => exportJSONBackup() },
+                { title: 'Open Shortcuts Dialog', icon: 'fa-keyboard', action: () => document.getElementById('shortcutsModal').classList.remove('hidden') }
+            ];
+
+            const q = query.toLowerCase();
+            const filteredCmds = commands.filter(c => c.title.toLowerCase().includes(q));
+
+            filteredCmds.forEach(cmd => {
+                const div = document.createElement('div');
+                div.className = 'p-2.5 hover:bg-darkHover rounded cursor-pointer flex items-center space-x-2 text-xs text-white';
+                div.innerHTML = `<i class="fa-solid ${cmd.icon} text-monoDark w-4"></i><span>${escapeHtml(cmd.title)}</span>`;
+                div.onclick = () => {
+                    toggleCommandPalette(false);
+                    cmd.action();
+                };
+                container.appendChild(div);
+            });
+        }
+
+        /* Mobile Drawer Control Utilities */
+        function toggleSidebarMobile() {
+            const sidebar = document.getElementById('sidebar');
+            const backdrop = document.getElementById('mobileBackdrop');
+            const isOpened = sidebar.classList.contains('mobile-drawer-open');
+
+            closeMobileDrawers();
+            if (!isOpened) {
+                sidebar.classList.add('mobile-drawer-open');
+                backdrop.classList.remove('hidden');
+            }
+        }
+
+        function toggleNotesMobile() {
+            const notesPanel = document.getElementById('notesListPanel');
+            const backdrop = document.getElementById('mobileBackdrop');
+            const isOpened = notesPanel.classList.contains('mobile-notes-open');
+
+            closeMobileDrawers();
+            if (!isOpened) {
+                notesPanel.classList.add('mobile-notes-open');
+                backdrop.classList.remove('hidden');
+            }
+        }
+
+        function closeMobileDrawers() {
+            document.getElementById('sidebar').classList.remove('mobile-drawer-open');
+            document.getElementById('notesListPanel').classList.remove('mobile-notes-open');
+            document.getElementById('mobileBackdrop').classList.add('hidden');
+        }
+
+        function applyResponsiveViewMode() {
+            const paneEdit = document.getElementById('paneEdit');
+            const panePreview = document.getElementById('panePreview');
+
+            if (AppState.viewMode === 'edit') {
+                paneEdit.classList.remove('hidden');
+                panePreview.classList.add('hidden');
+            } else if (AppState.viewMode === 'preview') {
+                paneEdit.classList.add('hidden');
+                panePreview.classList.remove('hidden');
+            } else {
+                paneEdit.classList.remove('hidden');
+                panePreview.classList.remove('hidden');
+            }
+        }
+
+        function setupEventListeners() {
+            document.getElementById('noteTitleInput').addEventListener('input', handleEditorChange);
+            document.getElementById('markdownSource').addEventListener('input', handleEditorChange);
+            document.getElementById('editorTagsInput').addEventListener('input', handleEditorChange);
+            document.getElementById('editorFolderSelect').addEventListener('change', handleEditorChange);
+
+            document.getElementById('globalSearchInput').addEventListener('input', (e) => {
+                AppState.searchQuery = e.target.value;
+                renderNotesList();
+            });
+
+            document.getElementById('btnNewNote').onclick = () => createNewNote();
+            document.getElementById('btnNewNoteHeader').onclick = () => createNewNote();
+            document.getElementById('btnNewFolder').onclick = () => createFolder();
+            document.getElementById('btnExportJSON').onclick = () => exportJSONBackup();
+            document.getElementById('importFileInput').onchange = (e) => {
+                if (e.target.files.length) importJSONBackup(e.target.files[0]);
+            };
+            document.getElementById('btnExportMarkdown').onclick = () => exportActiveMarkdown();
+            document.getElementById('btnVersionHistory').onclick = () => openVersionModal();
+            document.getElementById('btnCloseVersionModal').onclick = () => document.getElementById('versionModal').classList.add('hidden');
+            document.getElementById('btnDeleteNote').onclick = () => toggleDeleteNote();
+            document.getElementById('btnDismissSimilarity').onclick = () => document.getElementById('similarityBanner').classList.add('hidden');
+
+            /* Mobile Navigation Listeners */
+            document.getElementById('btnMobileToggleSidebar').onclick = toggleSidebarMobile;
+            document.getElementById('btnMobileToggleNotes').onclick = toggleNotesMobile;
+            document.getElementById('btnCloseSidebarMobile').onclick = closeMobileDrawers;
+            document.getElementById('btnCloseNotesMobile').onclick = closeMobileDrawers;
+            document.getElementById('mobileBackdrop').onclick = closeMobileDrawers;
+
+            document.getElementById('btnTogglePin').onclick = async () => {
+                const note = AppState.notes.find(n => n.id === AppState.activeNoteId);
+                if (note) {
+                    note.isPinned = !note.isPinned;
+                    await dbSave('notes', note);
+                    updatePinButtonUI(note.isPinned);
+                    renderSidebar();
+                    renderNotesList();
+                }
+            };
+
+            document.querySelectorAll('.nav-filter-btn').forEach(btn => {
+                btn.onclick = () => {
+                    AppState.activeFilter = btn.dataset.filter;
+                    AppState.filterValue = null;
+                    setActiveNavButton(btn.dataset.filter);
+                    document.getElementById('notesListTitle').textContent = btn.innerText.trim();
+                    renderNotesList();
+                    closeMobileDrawers();
+                };
+            });
+
+            document.getElementById('btnViewSplit').onclick = () => {
+                AppState.viewMode = 'split';
+                applyResponsiveViewMode();
+            };
+            document.getElementById('btnViewEdit').onclick = () => {
+                AppState.viewMode = 'edit';
+                applyResponsiveViewMode();
+            };
+            document.getElementById('btnViewPreview').onclick = () => {
+                AppState.viewMode = 'preview';
+                applyResponsiveViewMode();
+            };
+
+            document.getElementById('btnGraphViewToggle').onclick = () => renderGraphView();
+            document.getElementById('btnCloseGraph').onclick = () => document.getElementById('graphContainer').classList.add('hidden');
+
+            document.getElementById('btnShortcuts').onclick = () => document.getElementById('shortcutsModal').classList.remove('hidden');
+            document.getElementById('btnCloseShortcuts').onclick = () => document.getElementById('shortcutsModal').classList.add('hidden');
+
+            document.getElementById('cmdInput').addEventListener('input', (e) => renderCommandResults(e.target.value));
+
+            window.addEventListener('resize', () => {
+                if (window.innerWidth < 768 && AppState.viewMode === 'split') {
+                    AppState.viewMode = 'edit';
+                    applyResponsiveViewMode();
+                }
+            });
+
+            window.addEventListener('keydown', (e) => {
+                if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+                    e.preventDefault();
+                    toggleCommandPalette(true);
+                }
+                if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
+                    e.preventDefault();
+                    createNewNote();
+                }
+                if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+                    e.preventDefault();
+                    saveActiveNote();
+                    showToast('Note saved');
+                }
+                if ((e.ctrlKey || e.metaKey) && e.key === 'g') {
+                    e.preventDefault();
+                    renderGraphView();
+                }
+                if (e.key === '?' && !['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) {
+                    e.preventDefault();
+                    document.getElementById('shortcutsModal').classList.remove('hidden');
+                }
+                if (e.key === 'Escape') {
+                    toggleCommandPalette(false);
+                    document.getElementById('versionModal').classList.add('hidden');
+                    document.getElementById('shortcutsModal').classList.add('hidden');
+                    document.getElementById('graphContainer').classList.add('hidden');
+                    closeMobileDrawers();
+                }
+            });
+        }
+
+        window.onload = initApp;
+    </script>
+</body>
+</html>
